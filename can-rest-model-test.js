@@ -1,16 +1,20 @@
 var QUnit = require("steal-qunit");
 var fixture = require("can-fixture");
-var DefineMap = require("can-define/map/map");
-var DefineList = require("can-define/list/list");
+var ObservableArray = require("can-observable-array");
+var ObservableObject = require("can-observable-object");
 var restModel = require("./can-rest-model");
 var canReflect = require("can-reflect");
+var type = require("can-type");
 
-QUnit.module("can-realtime-rest-model");
+QUnit.module("can-rest-model");
 
 
 QUnit.test("CRUD basics", function(assert){
     assert.expect(10);
     var Status = canReflect.assignSymbols({},{
+        "can.isMember": function() {
+            return false;
+        },
         "can.new": function(val){
 
             return val.toLowerCase();
@@ -23,21 +27,28 @@ QUnit.test("CRUD basics", function(assert){
         }
     });
 
-    var Todo = DefineMap.extend("Todo",{
-        _id: {identity: true, type: "number"},
-        name: "string",
-        complete: "boolean",
-        dueDate: "date",
-        points: "number",
-        status: Status
-    });
-    var TodoList = DefineList.extend({
-        "#": Todo
-    });
+    class Todo extends ObservableObject {
+      static get props() {
+        return {
+            _id: {identity: true, type: Number},
+            name: String,
+            complete: type.maybeConvert(Boolean),
+            dueDate: type.convert(Date),
+            points: type.maybeConvert(Number),
+            status: type.convert(Status)
+        };
+      }
+    }
+
+    class TodoList extends ObservableArray {
+        static get items() {
+            return type.convert(Todo);
+        }
+    }
 
     restModel({
-        Map: Todo,
-        List: TodoList,
+        ArrayType: TodoList,
+        ObjectType: Todo,
         url: "/api/todos/{_id}"
     });
 
@@ -161,6 +172,6 @@ QUnit.test("CRUD basics", function(assert){
 QUnit.test("string signature", function(assert) {
     var connection = restModel("/api/todos/{_id}");
 
-    assert.ok(new connection.Map() instanceof DefineMap, "Map defined");
-    assert.ok(new connection.List() instanceof DefineList, "List defined");
+    assert.ok(new connection.ArrayType() instanceof ObservableArray, "ArrayType defined");
+    assert.ok(new connection.ObjectType() instanceof ObservableObject, "ObjectType defined");
 });

@@ -8,21 +8,21 @@ Connect a type to a restful service layer.
 
 @signature `restModel(options)`
 
-`restModel` extends the provided `options.Map` type
+`restModel` extends the provided `options.ObjectType` type
 with the ability to connect to a restful service layer. For example,
 the following extends a `Todo` type
 with the ability to connect to a restful service layer:
 
 ```js
-import {Todo, todoFixture} from "//unpkg.com/can-demo-models@5";
+import {Todo, todoFixture, TodoList} from "//unpkg.com/can-demo-models@6";
 import {restModel} from "can";
 
 // Creates a mock backend with 5 todos
 todoFixture(5);
 
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: "/api/todos/{id}"
 });
 
@@ -30,8 +30,8 @@ Todo.connection = restModel({
 Todo.getList().then(todos => {
     todos.forEach(todo => {
         console.log(todo.name);
-    })
-})
+    });
+});
 ```
   @codepen
 
@@ -45,7 +45,7 @@ Todo.getList().then(todos => {
 
 @param {Object} options Configuration options supported by all the mixed-in behaviors:
 
-- [can-connect/can/map/map._Map] - The map type constructor function used to create
+- [can-connect/can/map/map._Map ObjectType] - The map type constructor function used to create
   instances of the raw record data retrieved from the server.
   The type will also be decorated
   with the following methods:
@@ -57,7 +57,7 @@ Todo.getList().then(todos => {
   - [can-connect/can/map/map.prototype.isDestroying]
   - [can-connect/can/map/map.prototype.isNew]
 
-- [can-connect/can/map/map._List] - The list type constructor function used to create
+- [can-connect/can/map/map._List ArrayType] - The list type constructor function used to create
   a list of instances of the raw record data retrieved from the server. <span style="display:none">_</span>
 - [can-connect/data/url/url.url] - Configure the URLs used to create, retrieve, update and
   delete data. It can be configured with a single url like:
@@ -77,7 +77,7 @@ Todo.getList().then(todos => {
     destroyData: "POST /api/todo/delete?id={id}"
   }
   ```
-- [can-connect/data/url/url.ajax] - Specify a method to use to make requests; [can-ajax] is used by default, but jQuery's `.ajax` method can be passed.
+- [can-connect/data/url/url.ajax] - Specify a method to use to make requests; [can-ajax] is used by default, but jQuery’s `.ajax` method can be passed.
 - [can-connect/data/parse/parse.parseInstanceProp] - Specify the property to find the data that represents an instance item.
 - [can-connect/data/parse/parse.parseInstanceData] - Returns the properties that should be used to
   [can-connect/constructor/constructor.hydrateInstance make an instance]
@@ -87,7 +87,7 @@ Todo.getList().then(todos => {
 - [can-connect/data/parse/parse.parseListProp] Specify the property to find the list data within a `getList` response.
 - [can-connect/data/parse/parse.parseListData] Return the correctly formatted data for a `getList` response.
 - [can-connect/base/base.queryLogic] - Specify the identity properties of the
-  type. This is built automatically from the `Map` if [can-define/map/map] is used.
+  type. This is built automatically from the `ObjectType` if [can-observable-object] is used.
 
 @return {connection} Returns a connection object.
 
@@ -98,13 +98,13 @@ Create a connection with just a url. Use this if you do not need to pass in any 
 For example, the following creates a `Todo` type with the ability to connect to a restful service layer:
 
 ```js
-import {todoFixture} from "//unpkg.com/can-demo-models@5";
+import {todoFixture} from "//unpkg.com/can-demo-models@6";
 import {restModel} from "can";
 
 // Creates a mock backend with 5 todos
 todoFixture(5);
 
-const Todo = restModel("/api/todos/{id}").Map;
+const Todo = restModel("/api/todos/{id}").ObjectType;
 
 // Prints out all todo names
 Todo.getList().then(todos => {
@@ -119,7 +119,7 @@ Todo.getList().then(todos => {
   delete data.
 
 @return {connection} A connection that is the combination of the options and all the behaviors
-that `restModel` adds. The `connection` includes a `Map` property which is the type
+that `restModel` adds. The `connection` includes an `ObjectType` property which is the type
 constructor function used to create instances of the raw record data retrieved from the server.
 
 @body
@@ -143,41 +143,47 @@ are able to:
 ### Define data types
 
 The first step in creating a model is to define the types that will be used
-to hold and manipulate data on the server.  The following defines:
+to hold and manipulate data on the server.  The following defines a:
 
-- a `Todo` type to represent an individual todo's data
-- ` TodoList` type to represent a list of todos
+- `Todo` type to represent an individual todo’s data
+- `TodoList` type to represent a list of todos
 
 ```js
-import {DefineMap, DefineList, restModel} from "can";
+import { ObservableArray, ObservableObject, restModel, type } from "can";
 
-const Todo = DefineMap.extend("Todo",{
-    id: {type: "number", identity: true},
-    name: "string",
-    complete: "boolean",
-    createdAt: "date",
-    toggle(){
+class Todo extends ObservableObject {
+    static props = {
+        id: {type: Number, identity: true},
+        name: String,
+        complete: Boolean,
+        createdAt: Date
+    };
+
+    toggle() {
         this.complete = !this.complete;
     }
-})
+}
 
-Todo.List = DefineList.extend("TodoList",{
-    "#": Todo,
-    get completeCount(){
-        return this.filter({complete: true}).length;
-    }
-});
+class TodoList extends ObservableArray {
+    static props = {
+        get completeCount() {
+            return this.filter({complete: true}).length;
+        }
+    };
+
+    static items = type.convert(Todo);
+}
 ```
 @codepen
 
 Notice that properties and methods are defined on the types. While any
-of CanJS's map-types can be used to create a model, [can-define/map/map] currently
+of CanJS’s map-types can be used to create a model, [can-observable-object] currently
 is the easiest to configure.
 
 #### Nested data type or data types with relationships
 
 Sometimes your data might include nested data and/or related data. For example, if you
-get `todo` 5's data at `/api/todos/5` and it returns a nested `assignedTo` as follows:
+get `todo` 5’s data at `/api/todos/5` and it returns a nested `assignedTo` as follows:
 
 ```js
 {
@@ -194,43 +200,30 @@ get `todo` 5's data at `/api/todos/5` and it returns a nested `assignedTo` as fo
 You typically want to define that nested value as another type like:
 
 ```js
-const User = DefineMap.extend("User",{
-    id: "number",
-    userName: "string"
-});
+class User extends ObservableObject {
+    static props = {
+        id: Number,
+        userName: String
+    };
+}
 
-const Todo = DefineMap.extend("Todo",{
-    id: {type: "number", identity: true},
-    name: "string",
-    complete: "boolean",
-    assignedTo: User,
-    toggle(){
+class Todo extends ObservableObject {
+    static props = {
+        id: {type: Number, identity: true},
+        name: String,
+        complete: Boolean,
+        assignedTo: type.convert(User)
+    };
+
+    toggle() {
         this.complete = !this.complete;
     }
-});
+}
 ```
 
 Check out the [can-connect/can/ref/ref] behavior for additional relationship features.
 
-If you are using [can-define/map/map] and your server might add properties that can't be defined
-beforehand, make sure to unseal your todo type:
-
-```js
-const Todo = DefineMap.extend("Todo",
-{   
-    seal: false
-},
-{
-    id: {type: "number", identity: true},
-    name: "string",
-    complete: "boolean",
-    toggle(){
-        this.complete = !this.complete;
-    }
-});
-```
-
-Often with document-based data structures, it's nice to have a reference to the "root"
+Often with document-based data structures, it’s nice to have a reference to the "root"
 data object on all child objects.  For example, `todo` data might have a list of subtasks, each
 with their own name and complete status:
 
@@ -247,104 +240,100 @@ with their own name and complete status:
 ```
 
 It can be nice to have the individual subtasks have a reference to their parent `todo`. For example, this
-makes updating the subtask easier.  The following makes it so calling a `subtask`'s `.save()` actually
-calls it's `todo`'s `.save()` method:
+makes updating the subtask easier.  The following makes it so calling a `subtask`’s `.save()` actually
+calls its `todo`’s `.save()` method:
 
 ```js
-import {DefineMap, DefineList, restModel} from "//unpkg.com/can@5/core.mjs";
-import {todoFixture} from "//unpkg.com/can-demo-models@5";
+import { ObservableArray, ObservableObject, restModel, type } from "can";
+import { todoFixture } from "//unpkg.com/can-demo-models@6";
 
 // Model subtask
-const Subtask = DefineMap.extend("Subtask",{
-    name: "string",
-    complete: "boolean",
-    // parentTodo should not be serialized
-    parentTodo: {serialize: false, type: "any"},
+class Subtask extends ObservableObject {
+    static props = {
+        name: String,
+        complete: Boolean,
+
+        // parentTodo should not be serialized
+        parentTodo: {serialize: false, type: type.Any}
+    };
+
     // a save utility that actually saves the parent todo
-    save(){
+    save() {
         this.parentTodo.save();
     }
-});
+}
 
 // Model a list of subtasks to add the `parentTodo` to all subtasks
-Subtask.List = DefineList.extend("Subtasks",{
-    // Defines the items in the subtasks list
-    "#": {
-        Type: Subtask,
-        // If subtasks are added, set their parentTodo
-        added(subtasks){
-            if(this.parentTodo) {
-                subtasks.forEach((subtask) => {
-                    subtask.parentTodo = this.parentTodo;
-                })
-            }
-            return subtasks;
-        },
-        // If subtasks are removed, remove their parentTodo
-        removed(subtasks) {
-            subtasks.forEach((subtask) => {
-                subtask.parentTodo = null;
-            })
+class Subtasks extends ObservableArray {
+    static props = {
+        // If parentTodo is set, update all the subtasks' parentTodo
+        parentTodo: {
+            set(parentTodo) {
+                this.forEach((subtask) => {
+                    subtask.parentTodo = parentTodo;
+                });
+                return parentTodo;
+            },
+            serialize: false
         }
-    },
-    // If parentTodo is set, update all the subtasks' parentTodo
-    parentTodo: {
-        set(parentTodo){
-            this.forEach(function(subtask){
-                subtask.parentTodo = parentTodo;
-            });
-            return parentTodo;
-        },
-        serialize: false
-    }
-});
+    };
 
-const Todo = DefineMap.extend("Todo",{
-    id: {type: "number", identity: true},
-    name: "string",
-    complete: "boolean",
-    // Make it so when subtasks is set, it sets
-    // the parentTodo reference:
-    subtasks: {
-        Type: Subtask.List,
-        set(subtasks){
-            subtasks.parentTodo = this;
-            return subtasks;
+    // Defines the items in the subtasks list
+    static items = {
+        type: type.convert(Subtask)
+    };
+}
+
+class Todo extends ObservableObject {
+    static props = {
+        id: {type: Number, identity: true},
+        name: String,
+        complete: Boolean,
+
+        // Make it so when subtasks is set, it sets
+        // the parentTodo reference:
+        subtasks: {
+            type: type.convert(Subtasks),
+            set(subtasks) {
+                subtasks.parentTodo = this;
+                return subtasks;
+            }
         }
-    },
-    toggle(){
+    };
+
+    toggle() {
         this.complete = !this.complete;
     }
-});
+}
 
-Todo.List = DefineList.extend("TodoList",{
-    "#": Todo,
-});
+class TodoList extends ObservableArray {
+    static items = type.convert(Todo);
+}
 
 // Sets up a can-fixture as the backend
 todoFixture(0);
 
 // Creates a restModel
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: "/api/todos/{id}"
 });
 
 // Creates a new todo with one subtask
-let myTodo = new Todo({
-    name: "learn canjs", completed: false,
-    subtasks: [{name: "learn js", completed: false}]
+const myTodo = new Todo({
+    name: "learn canjs", complete: false,
+    subtasks: [{name: "learn js", complete: false}]
 });
 
 // Modifies and saves the subtask (thus saving the entire todo)
-myTodo.subtasks[0].completed = true;
+myTodo.subtasks[0].complete = true;
 myTodo.subtasks[0].save();
 
-// Reads the newly saved todo from the backend and prints it's completed status
-Todo.getList().then(todos => console.log(todos[0].subtasks[0].completed));
+// Reads the newly saved todo from the backend and prints its complete property
+Todo.getList().then(todos => console.log(todos[0].subtasks[0].complete));
 ```
-  @highlight 10-12
+  @highlight 14-17
   @codepen
 
 
@@ -354,26 +343,30 @@ If you're specifying the identity property on nested data types, `restModel` wil
 intelligently merge data.  For example, say a `Todo` and its nested `User` type are defined as follows:
 
 ```js
-const User = DefineMap.extend("User",{
-    id: "number",
-    name: "string"
-});
+class User extends ObservableObject {
+    static props = {
+        id: Number,
+        name: String
+    };
+}
 
-const Todo = DefineMap.extend("Todo",{
-    id: {type: "number", identity: true},
-    name: "string",
-    complete: "boolean",
-    assignedTo: [User]
-});
+class Todo extends ObservableObject {
+    static props = {
+        id: {type: Number, identity: true},
+        name: String,
+        complete: Boolean,
+        assignedTo: [User]
+    };
+}
 ```
 
 If a todo like the following:
 
 ```js
-let justin = new User({id: 20, name: "Justin"}),
-    ramiya = new User({id: 21, name: "Ramiya"});
+const justin = new User({id: 20, name: "Justin"});
+const ramiya = new User({id: 21, name: "Ramiya"});
 
-let todo = new Todo({
+const todo = new Todo({
     id: 1,
     name: "mow lawn",
     complete: false,
@@ -394,22 +387,24 @@ is updated with data like:
 }
 ```
 
-__Without__ specifying the identity property of `User`, the `justin` instance's `id` and `name` will be updated, __not__ the `ramiya` instance's like you might expect:
+__Without__ specifying the identity property of `User`, the `justin` instance’s `id` and `name` will be updated, __not__ the `ramiya` instance’s like you might expect:
 
 ```js
 justin.id //-> 21
 justin.name //-> "Ramiya Meyer"
 ```
 
-However, if the `User` object's `id` property is specified with an `identity: true` flag as follows:
+However, if the `User` object’s `id` property is specified with an `identity: true` flag as follows:
 
 ```js
-const User = DefineMap.extend("User",{
-    id: {type: "number", identity: true},
-    name: "string"
-});
+class User extends ObservableObject {
+    static props = {
+        id: {type: Number, identity: true},
+        name: String
+    };
+}
 ```
-@highlight 2
+@highlight 3
 
 When the update happens, the `ramiya` instance will be updated correctly:
 
@@ -430,8 +425,8 @@ might be as simple as the following:
 
 ```js
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: "/api/todos/{id}"
 });
 ```
@@ -443,7 +438,7 @@ This configuration assumes the following:
    {
        data: [
            { id: 5, name: "mow lawn", complete: false },
-           ...
+           // ...
        ],
        totalCount: 20
    }
@@ -453,7 +448,7 @@ This configuration assumes the following:
    (ex: `totalCount`) will be added to the list type. The data above produces:
 
    ```js
-   todos instanceof Todo.List //-> true
+   todos instanceof TodoList //-> true
    todos.totalCount          //-> 20
    todos[0] instanceof Todo  //-> true
    todos[0].id               //-> 5
@@ -497,8 +492,8 @@ and delete data:
 
 ```js
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: {
         getListData: "GET /api/todos/find",
         getData: "GET /api/todo/get/{id}",
@@ -517,13 +512,13 @@ resolves to the expected data format.  The following makes `getListData` use
 import { param, restModel } from "can";
 
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: {
-        getListData: function(query) {
-            return fetch("/api/todos/find?"+param(query)).then(function(response){
+        getListData: (query) => {
+            return fetch("/api/todos/find?" + param(query)).then((response) => {
                 return response.json();
-            })
+            });
         },
         getData: "GET /api/todo/get/{id}",
         createData: "POST /api/todo/create",
@@ -543,7 +538,7 @@ to fix the formatting.  For example, if `GET /api/todos` returned data like:
 {
     todos: [
         { id: 5, name: "mow lawn", complete: false },
-        ...
+        // ...
     ],
     totalCount: 20
 }
@@ -553,13 +548,13 @@ You could correct this with [can-connect/data/parse/parse.parseListProp] like:
 
 ```js
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
-    url: "/api/todos/{id}",
-    parseListProp: "todos"
+    ArrayType: TodoList,
+    ObjectType: Todo,
+    parseListProp: "todos",
+    url: "/api/todos/{id}"
 });
 ```
-
+@highlight 4
 
 
 ### Manipulate service data
@@ -568,38 +563,38 @@ The below code allows one to retrieve, create, update, and destroy instances usi
 methods on `Todo` and instances of `Todo`:
 
 ```js
-import {Todo, todoFixture} from "//unpkg.com/can-demo-models@5";
+import {Todo, todoFixture, TodoList} from "//unpkg.com/can-demo-models@6";
 import {restModel} from "can";
 
 // Creates a mock backend with 5 todos
 todoFixture(5);
 
 Todo.connection = restModel({
-    Map: Todo,
-    List: Todo.List,
+    ArrayType: TodoList,
+    ObjectType: Todo,
     url: "/api/todos/{id}"
 });
 
 // get a list of todos
-Todo.getList({filter: {complete: true}}) //-> Promise<Todo.List>
+Todo.getList({filter: {complete: true}}) //-> Promise<TodoList>
 
 // get a single todo
 Todo.get({id: 4}) //-> Promise<Todo>
 
 // create a todo and persist it to the server:
-let todo = new Todo({name: "learn canjs", complete: false})
-todo.save() //-> Promise<Todo>
+const newTodo = new Todo({name: "learn canjs", complete: false})
+newTodo.save() //-> Promise<Todo>
 
 // update the todo and persist changes to the server:
-todo.complete = true;
-todo.save() //-> Promise<Todo>
+newTodo.complete = true;
+newTodo.save() //-> Promise<Todo>
 
 // prints out all complete todos including the new one
 Todo.getList({filter: {complete: true}})
   .then(todos => todos.forEach(todo => console.log(todo.name)))
 
 // delete the todo on the server
-todo.destroy() //-> Promise<Todo>
+newTodo.destroy() //-> Promise<Todo>
 ```
 @codepen
 
@@ -629,14 +624,14 @@ update:
 are created, updated or destroyed:
 
 ```js
-Todo.on("created", function(ev, newTodo) {
+Todo.on("created", (ev, newTodo) => {
     console.log("Todo created event");
 });
 
-let todo = new Todo({name: "mow lawn"});
-todo.on("created", function(){
+const todo = new Todo({name: "mow lawn"});
+todo.on("created", () => {
     console.log("todo created event");
-})
+});
 
 todo.save()
     //-> logs "todo created event"
