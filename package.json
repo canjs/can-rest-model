@@ -1,6 +1,6 @@
 {
   "name": "can-rest-model",
-  "version": "2.0.0-pre.0",
+  "version": "2.0.0",
   "description": "Connect a map to a rest connection",
   "homepage": "http://canjs.com",
   "repository": {
